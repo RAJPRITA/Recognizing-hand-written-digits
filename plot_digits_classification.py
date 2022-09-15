@@ -2,7 +2,8 @@
 
 # Author: Gael Varoquaux <gael dot varoquaux at normalesup dot org>
 # License: BSD 3 clause
-
+from skimage import data, color
+from skimage.transform import rescale, resize, downscale_local_mean
 
 #part: library dependencies --sklearn, torch, tensorflow, numpy, transformer
 # Standard scientific Python imports
@@ -38,7 +39,14 @@ dev_frac = 0.1
 #part: Load dataset -- data from csv,tsv,jsonl,pickle
 
 digits = datasets.load_digits()
+data = digits.images.reshape((n_samples, -1))
+print("---Digits--")
+plt.figure(1, figsize=(3, 3))
+plt.imshow(digits.images[0], cmap=plt.cm.gray_r, interpolation="nearest")
+plt.show()
+print(digits.images[0].size)
 
+print("----------------")
 #PART:Sanity check visualization of the data
 _, axes = plt.subplots(nrows=1, ncols=4, figsize=(10, 3))
 for ax, image, label in zip(axes, digits.images, digits.target):
@@ -50,6 +58,7 @@ for ax, image, label in zip(axes, digits.images, digits.target):
 
 # flatten the images
 n_samples = len(digits.images)
+
 data = digits.images.reshape((n_samples, -1))
 
 X_train, X_dev_test, y_train, y_dev_test = train_test_split(
@@ -99,13 +108,21 @@ predicted = clf.predict(X_test)
 ###############################################################################
 # Below we visualize the first 4 test samples and show their predicted
 # digit value in the title.
-
-_, axes = plt.subplots(nrows=1, ncols=4, figsize=(10, 3))
+from PIL import Image
+_, axes = plt.subplots(nrows=1, ncols=4, figsize=(10, 10))
 for ax, image, prediction in zip(axes, X_test, predicted):
     ax.set_axis_off()
-    image = image.reshape(8, 8)
+    image = image.reshape(8,8)
     ax.imshow(image, cmap=plt.cm.gray_r, interpolation="nearest")
-    ax.set_title(f"Prediction: {prediction}")
+    image_resized = resize(image, (int(image.shape[0] // 4), int(image.shape[1] // 2)),
+                       anti_aliasing=True)
+    
+
+
+    ax.set_title(f"Prediction  : {prediction}" f"ImageSize: {image.size}")
+    print("the image with the size" f"Prediction: {prediction}" f"image_resized :{image_resized}\n")
+    
+    
 
 ###############################################################################
 # :func:`~sklearn.metrics.classification_report` builds a text report showing
@@ -128,4 +145,5 @@ print(cur_h_param)
 
 #plt.show()
 
+#plt.figure(1, figsize=(3, 3))
 
