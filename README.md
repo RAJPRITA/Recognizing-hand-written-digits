@@ -7,3 +7,11 @@ Run SVM  Decision Tree
 
 mean:  0.99   0.88
 std:  0.01   0.01
+
+
+
+docker build -t exp:v1 -f docker/Dockerfile .
+
+docker run -it exp:v1
+
+export FLASK_APP=api/app.py ; flask run
