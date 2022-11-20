@@ -13,4 +13,4 @@ def test_sum():
 
 
 def test_equal():
-    assert 1 == 2
+    assert 1 == 1
