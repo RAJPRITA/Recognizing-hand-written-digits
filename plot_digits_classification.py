@@ -1,16 +1,24 @@
-from sklearn import datasets, svm, metrics
-from sklearn import tree
+# Author: Gael Varoquaux <gael dot varoquaux at normalesup dot org>
+# License: BSD 3 clause
+
+
+# PART: library dependencies -- sklear, torch, tensorflow, numpy, transformers
+
+# Import datasets, classifiers and performance metrics
+from sklearn import datasets, svm, metrics, tree
+import pdb
 import numpy as np
-#import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
 from utils import (
     preprocess_digits,
     train_dev_test_split,
-    h_param_tuning,
-    h_param_tuning_dec,
     data_viz,
     get_all_h_param_comb,
-    predict
+    tune_and_save,
+    macro_f1
 )
+from joblib import dump, load
 
 train_frac, dev_frac, test_frac = 0.8, 0.1, 0.1
 assert train_frac + dev_frac + test_frac == 1.0
@@ -19,38 +27,67 @@ assert train_frac + dev_frac + test_frac == 1.0
 gamma_list = [0.01, 0.005, 0.001, 0.0005, 0.0001]
 c_list = [0.1, 0.2, 0.5, 0.7, 1, 2, 5, 7, 10]
 
-params = {"gamma": gamma_list, "C": c_list}
+svm_params = {}
+svm_params["gamma"] = gamma_list
+svm_params["C"] = c_list
+svm_h_param_comb = get_all_h_param_comb(svm_params)
 
-h_param_comb = get_all_h_param_comb(params)
+max_depth_list = [2, 10, 20, 50, 100]
+
+dec_params = {}
+dec_params["max_depth"] = max_depth_list
+dec_h_param_comb = get_all_h_param_comb(dec_params)
+
+h_param_comb = {"svm": svm_h_param_comb, "decision_tree": dec_h_param_comb}
 
 # PART: load dataset -- data from csv, tsv, jsonl, pickle
 digits = datasets.load_digits()
 data_viz(digits)
 data, label = preprocess_digits(digits)
+# housekeeping
 del digits
 
-models = [[tree.DecisionTreeClassifier(), 'decision_tree'], [svm.SVC(), 'svm']]
-perf_test = {}
-metric = metrics.accuracy_score
-for model in models:
-    ls = []
-    for i in range(5):
-        print(f"\nTraining for split: {i + 1}")
-        x_train, y_train, x_dev, y_dev, x_test, y_test = train_dev_test_split(data, label, train_frac, dev_frac)
-        clf = model[0]
-        if model[1] == 'svm':
-            best_model, best_metric, best_h_params = h_param_tuning(h_param_comb, clf, x_train, y_train, x_dev, y_dev,
-                                                                    metric)
-        else:
-            best_model, best_metric, best_h_params = h_param_tuning_dec(clf, x_train, y_train, x_dev, y_dev, metric)
-        ls.append(predict(best_model, x_test, y_test, metric))
-    perf_test[model[1]] = ls
-    ## Confusion Matrix
+# define the evaluation metric
+metric_list = [metrics.accuracy_score, macro_f1]
+h_metric = metrics.accuracy_score
 
+n_cv = 5
+results = {}
+for n in range(n_cv):
+    x_train, y_train, x_dev, y_dev, x_test, y_test = train_dev_test_split(
+        data, label, train_frac, dev_frac
+    )
+    # PART: Define the model
+    # Create a classifier: a support vector classifier
+    models_of_choice = {
+        "svm": svm.SVC(),
+        "decision_tree": tree.DecisionTreeClassifier(),
+    }
+    
+    for clf_name in models_of_choice:
+        clf = models_of_choice[clf_name]
+        print("[{}] Running hyper param tuning for {}".format(n,clf_name))
+        actual_model_path = tune_and_save(
+            clf, x_train, y_train, x_dev, y_dev, h_metric, h_param_comb[clf_name], model_path=None
+        )
 
-print("\n")
-for i in range(5):
-    print(i + 1, round(perf_test['svm'][i], 2), round(perf_test['decision_tree'][i], 2))
-print("mean: ", round(np.mean(perf_test['svm']), 2), " ", round(np.mean(perf_test['decision_tree']), 2))
-print("std: ", round(np.std(perf_test['svm']), 2), " ", round(np.std(perf_test['decision_tree']), 2))
+        # 2. load the best_model
+        best_model = load(actual_model_path)
+    
+        # PART: Get test set predictions
+        # Predict the value of the digit on the test subset
+        predicted = best_model.predict(x_test)
+        if not clf_name in results:
+            results[clf_name]=[]    
+
+        results[clf_name].append({m.__name__:m(y_pred=predicted, y_true=y_test) for m in metric_list})
+        # 4. report the test set accurancy with that best model.
+        # PART: Compute evaluation metrics
+        print(
+            f"Classification report for classifier {clf}:\n"
+            f"{metrics.classification_report(y_test, predicted)}\n"
+        )
+
+print(results)
+
 
